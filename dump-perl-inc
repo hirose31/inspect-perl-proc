@@ -1,0 +1,218 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+use Getopt::Long qw(:config posix_default no_ignore_case no_ignore_case_always permute);
+use Pod::Usage;
+
+use Log::Minimal;
+use Carp;
+
+my $Debug = 0;
+
+MAIN: {
+    my $target_pid;
+    GetOptions(
+               'pid|p=i'  => \$target_pid,
+               'debug|d+' => \$Debug,
+               'help|h|?' => sub { pod2usage(-verbose=>1) }) or pod2usage();
+    defined $target_pid or pod2usage;
+    $ENV{LM_DEBUG} = 1 if $Debug;
+
+    my $perl_code = <<'EOPC';
+open my $fh, '>',  '/tmp/dump_inc' or die $!;
+print {$fh} qq<{\n>;
+for my $mod (keys %INC) {
+    printf {$fh} qq{'%s' => '%s',\n}, $mod, $INC{$mod};
+}
+print {$fh} qq<};\n>;
+close $fh;
+EOPC
+    $perl_code =~ s/\n/ /g;
+    debugf("perl_code: %s", $perl_code);
+
+
+    my $gdb = Devel::GDB::Tiny->new(
+        pid => $target_pid,
+    );
+
+    my $res;
+    $res = $gdb->get(qq{call Perl_eval_pv("$perl_code",0)\n});
+    $gdb->finish;
+
+    if ($res !~ /\s0x\w+/) {
+        print "Failed to get \%INC. Is your perl built with debug symbol?\n";
+        exit 1;
+    }
+
+    print "DONE. Please check /tmp/dump_inc\n";
+    exit 0;
+}
+
+# ========================================================================
+package
+    Devel::GDB::Tiny;
+
+use strict;
+use warnings;
+
+use Log::Minimal;
+use IPC::Open2;
+
+sub new {
+    my($class, %args) = @_;
+
+    my $self = bless {
+        %args,
+        _rh          => undef,
+        _rw          => undef,
+        _initialized => 0,
+    }, $class;
+
+    return $self;
+}
+
+sub init {
+    my $self = shift;
+    debugf("init");
+
+    my $gdb_cmd = 'gdb -silent -nw ';
+    if (defined $self->{pid}) {
+        $gdb_cmd .= "-p $self->{pid}";
+    } else {
+        die "fixme to accept executable-file core-file";
+    }
+
+    open2 $self->{_rh}, $self->{_wh}, $gdb_cmd or die $!;
+    $self->{_initialized} = 1;
+
+    $self->send('');
+    $self->send('set pagination off');
+
+}
+
+sub finish {
+    my $self = shift;
+    debugf("finish");
+
+    return unless $self->{_initialized};
+
+    $self->send('detach');
+    $self->send('quit');
+    if (defined $self->{pid}) {
+        kill 'CONT', $self->{pid};
+    }
+    close $self->{_rh}; $self->{_rh} = undef;
+    close $self->{_wh}; $self->{_wh} = undef;
+
+    $self->{_initialized} = 0;
+}
+
+sub send {
+    my($self, $cmd) = @_;
+
+    $self->init unless $self->{_initialized};
+
+    debugf("C %s", $cmd);
+
+    if ($cmd) {
+        chomp $cmd; $cmd .= "\n";
+        my $len = syswrite $self->{_wh}, $cmd;
+        if ($len < length($cmd)) {
+            die "failed to exec: $cmd\n";
+        }
+    }
+
+    my $res = '';
+    while (1) {
+        my $buf = '';
+        my $len = sysread $self->{_rh}, $buf, 1024;
+        last if $len <= 0;
+        $res .= $buf;
+        last if $res =~ /\(gdb\)\s+$/;
+    }
+    debugf("R %s", $res);
+
+    return $res;
+}
+
+# $1 = 0xce5ad0 "AUTOJUMP_AUTOCOMPLETE_CMDS=vim cp em"
+# -> return "AUTOJUMP_AUTOCOMPLETE_CMDS=vim cp em"
+sub get {
+    my($self, $cmd) = @_;
+
+    my $res = $self->send($cmd);
+
+    return '' if ($res !~ /.* =\s+(.+)/s);
+    my $v = $1;
+    if ($res =~ /0x\w+\s+\"(.+)\"/) {
+        return $1;
+    }
+    return $v;
+}
+
+sub DESTROY {
+    my $self = shift;
+    $self->finish;
+}
+
+
+__END__
+
+=head1 NAME
+
+B<dump-perl-inc> - get %INC and dump into file
+
+=head1 SYNOPSIS
+
+B<dump-perl-inc>
+[B<-p> I<PID>]
+[B<-d> | B<--debug>]
+
+B<dump-perl-inc> B<-h> | B<--help> | B<-?>
+
+  $ dump-perl-inc -p 1974
+
+=head1 DESCRIPTION
+
+This script is for get %INC and dump into file (/tmp/dump_inc) from running perl process.
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-p> I<PID>, B<--pid> I<PID>
+
+Specify PID which process you want to get %INC.
+
+=item B<-d>, B<--debug>
+
+increase debug level.
+-d -d more verbosely.
+
+=back
+
+=head1 AUTHOR
+
+HIROSE, Masaaki E<lt>hirose31 _at_ gmail.comE<gt>
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or modify it
+under the same terms as Perl itself.
+
+=cut
+
+# for Emacsen
+# Local Variables:
+# mode: cperl
+# cperl-indent-level: 4
+# cperl-close-paren-offset: -4
+# cperl-indent-parens-as-block: t
+# indent-tabs-mode: nil
+# coding: utf-8
+# End:
+
+# vi: set ts=4 sw=4 sts=0 et ft=perl fenc=utf-8 ff=unix :
+
