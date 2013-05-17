@@ -6,12 +6,18 @@ use warnings;
 use Getopt::Long qw(:config posix_default no_ignore_case no_ignore_case_always permute);
 use Pod::Usage;
 
-use Log::Minimal;
 use Carp;
 
 my $PROG = substr($0, rindex($0, '/')+1);
 
 my $Debug = 0;
+
+sub dprint (@) {
+    return unless $Debug;
+    my @m = @_;
+    chomp @m;
+    print STDERR @m,"\n";
+}
 
 MAIN: {
     my $target_pid;
@@ -66,7 +72,7 @@ EOPC
     }
 
     $perl_code =~ s/\n/ /g;
-    debugf("perl_code: %s", $perl_code);
+    dprint("perl_code: $perl_code");
 
 
     my $gdb = Devel::GDB::Tiny->new(
@@ -93,8 +99,14 @@ package
 use strict;
 use warnings;
 
-use Log::Minimal;
 use IPC::Open2;
+
+sub dprint (@) {
+    return unless $Debug;
+    my @m = @_;
+    chomp @m;
+    print STDERR @m,"\n";
+}
 
 sub new {
     my($class, %args) = @_;
@@ -111,7 +123,7 @@ sub new {
 
 sub init {
     my $self = shift;
-    debugf("init");
+    dprint("init");
 
     my $gdb_cmd = 'gdb -silent -nw ';
     if (defined $self->{pid}) {
@@ -130,7 +142,7 @@ sub init {
 
 sub finish {
     my $self = shift;
-    debugf("finish");
+    dprint("finish");
 
     return unless $self->{_initialized};
 
@@ -150,7 +162,7 @@ sub send {
 
     $self->init unless $self->{_initialized};
 
-    debugf("C %s", $cmd);
+    dprint("C $cmd");
 
     if ($cmd) {
         chomp $cmd; $cmd .= "\n";
@@ -168,7 +180,7 @@ sub send {
         $res .= $buf;
         last if $res =~ /\(gdb\)\s+$/;
     }
-    debugf("R %s", $res);
+    dprint("R $res");
 
     return $res;
 }
