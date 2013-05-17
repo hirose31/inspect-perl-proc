@@ -9,19 +9,33 @@ use Pod::Usage;
 use Log::Minimal;
 use Carp;
 
+my $PROG = substr($0, rindex($0, '/')+1);
+
 my $Debug = 0;
 
 MAIN: {
     my $target_pid;
+    my $mode;
     GetOptions(
                'pid|p=i'  => \$target_pid,
+               'mode|m=s' => \$mode,
                'debug|d+' => \$Debug,
                'help|h|?' => sub { pod2usage(-verbose=>1) }) or pod2usage();
     defined $target_pid or pod2usage;
     $ENV{LM_DEBUG} = 1 if $Debug;
 
-    my $perl_code = <<'EOPC';
-open my $fh, '>',  '/tmp/dump_inc' or die $!;
+    if ($PROG eq 'dump-perl-inc') {
+        $mode = 'dump-inc';
+    } elsif ($PROG eq 'dump-perl-memusage') {
+        $mode = 'dump-memusage';
+    }
+    defined $mode or pod2usage('Missing --mode');
+
+    my $perl_code;
+    my $output_file;
+    if ($mode eq 'dump-inc') {
+        $perl_code = <<'EOPC';
+open my $fh, '>',  qq{/tmp/dump_inc.$$.}.time() or die $!;
 print {$fh} qq<{\n>;
 for my $mod (keys %INC) {
     printf {$fh} qq{'%s' => '%s',\n}, $mod, $INC{$mod};
@@ -29,6 +43,28 @@ for my $mod (keys %INC) {
 print {$fh} qq<};\n>;
 close $fh;
 EOPC
+        $output_file = "/tmp/dump_inc.${target_pid}.XXXXX";
+
+    } elsif ($mode eq 'dump-memusage') {
+        $perl_code = <<'EOPC';
+use B::Size2::Terse;
+use Devel::Symdump;
+open my $fh, '>',  qq{/tmp/dump_memusage.$$.}.time() or die $!;
+my @packages = Devel::Symdump->rnew('main')->packages;
+print {$fh} qq<{\n>;
+for my $package ('main', @packages) {
+    my($subs, $opcount, $opsize) = B::Size2::Terse::package_size($package);
+    printf {$fh} qq{'%s' => '%s',\n}, $package, $opsize;
+}
+print {$fh} qq<};\n>;
+close $fh;
+EOPC
+        $output_file = "/tmp/dump_memusage.${target_pid}.XXXXX";
+
+    } else {
+        pod2usage("Invalid mode: $mode");
+    }
+
     $perl_code =~ s/\n/ /g;
     debugf("perl_code: %s", $perl_code);
 
@@ -42,11 +78,11 @@ EOPC
     $gdb->finish;
 
     if ($res !~ /\s0x\w+/) {
-        print "Failed to get \%INC. Is your perl built with debug symbol?\n";
+        print "Failed to inspect. Is your perl built with debug symbol?\n";
         exit 1;
     }
 
-    print "DONE. Please check /tmp/dump_inc\n";
+    print "DONE. Please check ${output_file}\n";
     exit 0;
 }
 
@@ -162,25 +198,58 @@ __END__
 
 =head1 NAME
 
-B<dump-perl-inc> - get %INC and dump into file
+B<inspect-perl-proc> - inspect running perl process
 
 =head1 SYNOPSIS
+
+B<inspect-perl-proc>
+[B<-m> I<MODE>]
+[B<-p> I<PID>]
+[B<-d> | B<--debug>]
 
 B<dump-perl-inc>
 [B<-p> I<PID>]
 [B<-d> | B<--debug>]
 
-B<dump-perl-inc> B<-h> | B<--help> | B<-?>
+B<dump-perl-memusage>
+[B<-p> I<PID>]
+[B<-d> | B<--debug>]
 
+B<inspect-perl-proc> B<-h> | B<--help> | B<-?>
+
+  $ inspect-perl-proc -m 'dump-inc' -p 1974
+    OR
   $ dump-perl-inc -p 1974
+  
+  $ inspect-perl-proc -m 'dump-memusage' -p 1974
+    OR
+  $ dump-perl-memusage -p 1974
+
+
+After inspecting, you can get a result as shown below.
+
+  my $result = do '/tmp/dump_memusage.1974.1368772330';
+  warn Dumper($result);
 
 =head1 DESCRIPTION
 
-This script is for get %INC and dump into file (/tmp/dump_inc) from running perl process.
+This script is for inspecting running perl process.
+
+inspect-perl-proc has two modes.
+
+"dump-inc" is to dump %INC (loaded modules).
+"inspect-perl-proc --mode 'dump-inc'" is same as "dump-perl-inc".
+
+"dump-memusage" is to dump memory size by package.
+"inspect-perl-proc --mode 'dump-memusage'" is same as "dump-perl-memusage".
 
 =head1 OPTIONS
 
 =over 4
+
+=item B<-m> I<MODE>, B<--mode> I<MODE>
+
+Specify mode. I<MODE> is "dump-inc" or "dump-memusage".
 
 =item B<-p> I<PID>, B<--pid> I<PID>
 
