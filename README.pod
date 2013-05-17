@@ -1,1 +1,1 @@
-dump-perl-inc
+inspect-perl-proc
