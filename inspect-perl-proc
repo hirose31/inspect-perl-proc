@@ -80,7 +80,11 @@ EOPC
     );
 
     my $res;
-    $res = $gdb->get(qq{call Perl_eval_pv("$perl_code",0)\n});
+    $res = $gdb->send(qq{call Perl_eval_pv("$perl_code",0)\n});
+    if ($res =~ /Too few arguments in function call/) {
+        # thread enabled perl?
+        $res = $gdb->get(qq{call Perl_eval_pv(Perl_get_context(), "$perl_code",0)\n});
+    }
     $gdb->finish;
 
     if ($res !~ /\s0x\w+/) {
@@ -131,6 +135,7 @@ sub init {
     } else {
         die "fixme to accept executable-file core-file";
     }
+    $gdb_cmd .= ' 2>&1';
 
     open2 $self->{_rh}, $self->{_wh}, $gdb_cmd or die $!;
     $self->{_initialized} = 1;
