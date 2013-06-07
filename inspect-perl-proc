@@ -53,14 +53,21 @@ EOPC
 
     } elsif ($mode eq 'dump-memusage') {
         $perl_code = <<'EOPC';
-use B::Size2::Terse;
+use B::Size2::Terse 2.07;
 use Devel::Symdump;
 open my $fh, '>',  qq{/tmp/dump_memusage.$$.}.time() or die $!;
 my @packages = Devel::Symdump->rnew('main')->packages;
 print {$fh} qq<{\n>;
-for my $package ('main', @packages) {
-    my($subs, $opcount, $opsize) = B::Size2::Terse::package_size($package);
-    printf {$fh} qq{'%s' => '%s',\n}, $package, $opsize;
+for my $package ('main', sort @packages) {
+    local $@;
+    eval {
+        my($subs, $opcount, $opsize) = B::Size2::Terse::package_size($package);
+        printf {$fh} qq{'%s' => '%s',\n}, $package, $opsize;
+    };
+    if ($@) {
+        my $e = $@; chomp $e;
+        printf {$fh} qq{'%s' => '0', # ERROR %s\n}, $package, $e;
+    }
 }
 print {$fh} qq<};\n>;
 close $fh;
