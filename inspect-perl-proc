@@ -34,6 +34,8 @@ MAIN: {
         $mode = 'dump-inc';
     } elsif ($PROG eq 'dump-perl-memusage') {
         $mode = 'dump-memusage';
+    } elsif ($PROG eq 'dump-perl-stacktrace') {
+        $mode = 'dump-stacktrace';
     }
     defined $mode or pod2usage('Missing --mode');
 
@@ -81,6 +83,15 @@ if (open my $fh, '>',  qq{/tmp/dump_memusage.$$.}.time()) {
 };
 EOPC
         $output_file = "/tmp/dump_memusage.${target_pid}.XXXXX";
+
+    } elsif ($mode eq 'dump-stacktrace') {
+        $perl_code = <<'EOPC';
+open my $fh, '>',  qq{/tmp/dump_stacktrace.$$.}.time() or die $!;
+require Carp;
+print {$fh} Carp::longmess(q{Dump stacktrace});
+close $fh;
+EOPC
+        $output_file = "/tmp/dump_stacktrace.${target_pid}.XXXXX";
 
     } else {
         pod2usage("Invalid mode: $mode");
@@ -247,6 +258,10 @@ B<dump-perl-memusage>
 [B<-p> I<PID>]
 [B<-d> | B<--debug>]
 
+B<dump-perl-stacktrace>
+[B<-p> I<PID>]
+[B<-d> | B<--debug>]
+
 B<inspect-perl-proc> B<-h> | B<--help> | B<-?>
 
   $ inspect-perl-proc -m 'dump-inc' -p 1974
@@ -256,6 +271,10 @@ B<inspect-perl-proc> B<-h> | B<--help> | B<-?>
   $ inspect-perl-proc -m 'dump-memusage' -p 1974
     OR
   $ dump-perl-memusage -p 1974
+  
+  $ inspect-perl-proc -m 'dump-stacktrace' -p 1974
+    OR
+  $ dump-perl-stacktrace -p 1974
 
 
 After inspecting, you can get a result as shown below.
@@ -275,13 +294,16 @@ inspect-perl-proc has two modes.
 "dump-memusage" is to dump memory size by package.
 "inspect-perl-proc --mode 'dump-memusage'" is same as "dump-perl-memusage".
 
+"dump-stacktrace" is to dump stacktrace (backtrace).
+"inspect-perl-proc --mode 'dump-stacktrace'" is same as "dump-perl-stacktrace".
+
 =head1 OPTIONS
 
 =over 4
 
 =item B<-m> I<MODE>, B<--mode> I<MODE>
 
-Specify mode. I<MODE> is "dump-inc" or "dump-memusage".
+Specify mode. I<MODE> is "dump-inc" or "dump-memusage" or "dump-stacktrace".
 
 =item B<-p> I<PID>, B<--pid> I<PID>
 
