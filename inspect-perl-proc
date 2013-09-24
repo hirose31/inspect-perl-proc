@@ -93,6 +93,10 @@ close $fh;
 EOPC
         $output_file = "/tmp/dump_stacktrace.${target_pid}.XXXXX";
 
+    } elsif ($mode eq 'debug') {
+        $perl_code = <<'EOPC';
+sleep 30;
+EOPC
     } else {
         pod2usage("Invalid mode: $mode");
     }
@@ -168,6 +172,7 @@ sub init {
 
     $self->send('');
     $self->send('set pagination off');
+    $self->send('set unwindonsignal on');
 
 }
 
