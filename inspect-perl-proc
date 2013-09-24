@@ -291,7 +291,7 @@ After inspecting, you can get a result as shown below.
 
 This script is for inspecting running perl process.
 
-inspect-perl-proc has two modes.
+inspect-perl-proc has several modes.
 
 "dump-inc" is to dump %INC (loaded modules).
 "inspect-perl-proc --mode 'dump-inc'" is same as "dump-perl-inc".
