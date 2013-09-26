@@ -321,6 +321,10 @@ increase debug level.
 
 =back
 
+=head1 KNOWN ISSUE
+
+Inspecting on CentOS 5.8's system perl(5.8.8) causes segmentation fault. (perlbrewed perl-5.8.8 on CentOS 5.8 is OK)
+
 =head1 AUTHOR
 
 HIROSE, Masaaki E<lt>hirose31 _at_ gmail.comE<gt>
