@@ -32,6 +32,8 @@ MAIN: {
 
     if ($PROG eq 'dump-perl-inc') {
         $mode = 'dump-inc';
+    } elsif ($PROG eq 'dump-perl-incpath') {
+        $mode = 'dump-incpath';
     } elsif ($PROG eq 'dump-perl-memusage') {
         $mode = 'dump-memusage';
     } elsif ($PROG eq 'dump-perl-stacktrace') {
@@ -52,6 +54,16 @@ print {$fh} qq<};\n>;
 close $fh;
 EOPC
         $output_file = "/tmp/dump_inc.${target_pid}.XXXXX";
+
+    } elsif ($mode eq 'dump-incpath') {
+        $perl_code = <<'EOPC';
+open my $fh, '>',  qq{/tmp/dump_incpath.$$.}.time() or die $!;
+print {$fh} qq<(\n>;
+print {$fh} qq{'$_',\n} for @INC;
+print {$fh} qq<);\n>;
+close $fh;
+EOPC
+        $output_file = "/tmp/dump_incpath.${target_pid}.XXXXX";
 
     } elsif ($mode eq 'dump-memusage') {
         $perl_code = <<'EOPC';
@@ -259,6 +271,10 @@ B<dump-perl-inc>
 [B<-p> I<PID>]
 [B<-d> | B<--debug>]
 
+B<dump-perl-incpath>
+[B<-p> I<PID>]
+[B<-d> | B<--debug>]
+
 B<dump-perl-memusage>
 [B<-p> I<PID>]
 [B<-d> | B<--debug>]
@@ -272,6 +288,10 @@ B<inspect-perl-proc> B<-h> | B<--help> | B<-?>
   $ inspect-perl-proc -m 'dump-inc' -p 1974
     OR
   $ dump-perl-inc -p 1974
+  
+  $ inspect-perl-proc -m 'dump-incpath' -p 1974
+    OR
+  $ dump-perl-incpath -p 1974
   
   $ inspect-perl-proc -m 'dump-memusage' -p 1974
     OR
@@ -296,6 +316,9 @@ inspect-perl-proc has several modes.
 "dump-inc" is to dump %INC (loaded modules).
 "inspect-perl-proc --mode 'dump-inc'" is same as "dump-perl-inc".
 
+"dump-incpath" is to dump @INC (load paths).
+"inspect-perl-proc --mode 'dump-incpath'" is same as "dump-perl-incpath".
+
 "dump-memusage" is to dump memory size by package.
 "inspect-perl-proc --mode 'dump-memusage'" is same as "dump-perl-memusage".
 
@@ -308,11 +331,11 @@ inspect-perl-proc has several modes.
 
 =item B<-m> I<MODE>, B<--mode> I<MODE>
 
-Specify mode. I<MODE> is "dump-inc" or "dump-memusage" or "dump-stacktrace".
+Specify mode. I<MODE> is "dump-inc" or or "dump-incpath" "dump-memusage" or "dump-stacktrace".
 
 =item B<-p> I<PID>, B<--pid> I<PID>
 
-Specify PID which process you want to get %INC.
+Specify PID which process you want to examine.
 
 =item B<-d>, B<--debug>
 
