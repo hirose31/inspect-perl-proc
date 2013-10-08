@@ -36,6 +36,8 @@ MAIN: {
         $mode = 'dump-incpath';
     } elsif ($PROG eq 'dump-perl-memusage') {
         $mode = 'dump-memusage';
+    } elsif ($PROG eq 'dump-perl-env') {
+        $mode = 'dump-env';
     } elsif ($PROG eq 'dump-perl-stacktrace') {
         $mode = 'dump-stacktrace';
     }
@@ -95,6 +97,18 @@ if (open my $fh, '>',  qq{/tmp/dump_memusage.$$.}.time()) {
 };
 EOPC
         $output_file = "/tmp/dump_memusage.${target_pid}.XXXXX";
+
+    } elsif ($mode eq 'dump-env') {
+        $perl_code = <<'EOPC';
+open my $fh, '>',  qq{/tmp/dump_env.$$.}.time() or die $!;
+print {$fh} qq<{\n>;
+for my $k (sort keys %ENV) {
+    printf {$fh} qq{'%s' => '%s',\n}, $k, $ENV{$k};
+}
+print {$fh} qq<};\n>;
+close $fh;
+EOPC
+        $output_file = "/tmp/dump_env.${target_pid}.XXXXX";
 
     } elsif ($mode eq 'dump-stacktrace') {
         $perl_code = <<'EOPC';
@@ -279,6 +293,10 @@ B<dump-perl-memusage>
 [B<-p> I<PID>]
 [B<-d> | B<--debug>]
 
+B<dump-perl-env>
+[B<-p> I<PID>]
+[B<-d> | B<--debug>]
+
 B<dump-perl-stacktrace>
 [B<-p> I<PID>]
 [B<-d> | B<--debug>]
@@ -296,6 +314,10 @@ B<inspect-perl-proc> B<-h> | B<--help> | B<-?>
   $ inspect-perl-proc -m 'dump-memusage' -p 1974
     OR
   $ dump-perl-memusage -p 1974
+  
+  $ inspect-perl-proc -m 'dump-env' -p 1974
+    OR
+  $ dump-perl-env -p 1974
   
   $ inspect-perl-proc -m 'dump-stacktrace' -p 1974
     OR
@@ -322,6 +344,9 @@ inspect-perl-proc has several modes.
 "dump-memusage" is to dump memory size by package.
 "inspect-perl-proc --mode 'dump-memusage'" is same as "dump-perl-memusage".
 
+"dump-env" is to dump %ENV.
+"inspect-perl-proc --mode 'dump-env'" is same as "dump-perl-env".
+
 "dump-stacktrace" is to dump stacktrace (backtrace).
 "inspect-perl-proc --mode 'dump-stacktrace'" is same as "dump-perl-stacktrace".
 
@@ -331,7 +356,7 @@ inspect-perl-proc has several modes.
 
 =item B<-m> I<MODE>, B<--mode> I<MODE>
 
-Specify mode. I<MODE> is "dump-inc" or or "dump-incpath" "dump-memusage" or "dump-stacktrace".
+Specify mode. I<MODE> is "dump-inc" or or "dump-incpath" "dump-memusage" or "dump-env" or "dump-stacktrace".
 
 =item B<-p> I<PID>, B<--pid> I<PID>
 
