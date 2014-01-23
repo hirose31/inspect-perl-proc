@@ -1,0 +1,130 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+use Getopt::Long qw(:config posix_default no_ignore_case no_ignore_case_always permute);
+use Pod::Usage;
+
+my $INDENT_STR = "  ";
+
+MAIN: {
+    GetOptions(
+        'help|h|?' => sub { pod2usage(-verbose=>1) },
+    ) or pod2usage();
+
+    my $input_file = $ARGV[0] || "-";
+    my ($tree, $rflags) = load_tree($input_file);
+    dump_tree($tree, get_roots($rflags));
+}
+
+sub load_tree {
+    my $fname = shift;
+    my %tree;
+    my %rflags;
+    my $fh;
+    if ($fname eq "-") {
+        $fh = \*STDIN;
+    } else {
+        open $fh, $fname or die;
+    }
+    while (my $line = <$fh>) {
+        chomp $line;
+        my ($datetime, $child, $parent, $file, $line) = split /\t/, $line;
+        if (!exists $tree{$parent}) {
+            $tree{$parent} = [];
+        }
+        push @{$tree{$parent}}, [$child, $file, $line];
+        if (!exists $rflags{$child}) {
+            $rflags{$child} = 0;
+        }
+        if (!exists $rflags{$parent}) {
+            $rflags{$parent} = 0;
+        }
+        $rflags{$child}++;
+    }
+    close $fh;
+    return (\%tree, \%rflags);
+}
+
+sub dump_tree {
+    my ($tree, $rroots) = @_;
+    my @roots = @$rroots;
+    for my $root (@roots) {
+        dump_tree_rec($tree, $root, 0);
+    }
+}
+
+sub dump_tree_rec {
+    my ($tree, $parent, $depth) = @_;
+    print $INDENT_STR x $depth . $parent . "\n" if $depth == 0;
+    if (!exists $tree->{$parent}) {
+        return;
+    }
+    my $children = $tree->{$parent};
+    for my $child (sort { $a->[0] cmp $b->[0] } @$children) {
+        print $INDENT_STR x ($depth + 1) . $child->[0] . " (" . $child->[1] . ":" . $child->[2] . ")\n";
+        dump_tree_rec($tree, $child->[0], $depth + 1);
+    }
+}
+
+sub get_roots {
+    my $rflags = shift;
+    my @roots = grep { $rflags->{$_} == 0 } keys %$rflags;
+    return \@roots;
+}
+
+__END__
+
+=head1 NAME
+
+B<perl-requiretree> - print perl moudle call stack
+
+=head1 SYNOPSIS
+
+B<perl-requiretree> file
+
+B<perl-requiretree> B<-h> | B<--help> | B<-?>
+
+  $ perl-requiretree hook_require.9559
+
+=head1 DESCRIPTION
+
+Print module call stack in the form of tree.
+
+This script expects passed below format.
+
+  <date>\t<callee>\t<caller>\t<caller file path>\t<call line>\n
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-h>, B<--help>, B<-?>
+
+Print usage.
+
+=back
+
+=head1 SEE ALSO
+
+L<inspect-perl-proc>
+
+=head1 AUTHOR
+
+Hirotake Kobayashi E<lt>hkobayash0220 _at_ gmail.comE<gt>
+
+=cut
+
+# for Emacsen
+# Local Variables:
+# mode: cperl
+# cperl-indent-level: 4
+# cperl-close-paren-offset: -4
+# cperl-indent-parens-as-block: t
+# indent-tabs-mode: nil
+# coding: utf-8
+# End:
+
+# vi: set ts=4 sw=4 sts=0 et ft=perl fenc=utf-8 ff=unix :
+
