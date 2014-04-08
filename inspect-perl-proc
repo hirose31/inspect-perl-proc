@@ -176,16 +176,25 @@ EOPC
     # http://www.perlmonks.org/?node_id
     # With Perl 5.16.3, process will exit after detach gdb,
     # so we set breakpoint at main loop (Perl_runops_standard).
+    # fixme
+    $gdb->send(qq{bt});
     my $breakpoint;
-    $res = $gdb->send(qq{bt});
-    for my $frame (split /[\r\n]/, $res) {
-        if ($frame =~ /\s+Perl_runops_standard\s+.+at\s+(.+:[0-9]+)/) {
-            $breakpoint = $1;
-            dprint("b $breakpoint");
-            $gdb->send("b $breakpoint");
-            last;
+    $res = $gdb->send(qq{disassemble Perl_runops_standard});
+    {
+        my @asm = grep /^0x/, map { s/^\s+//; $_ } split /[\r\n]/, $res;
+        while (defined(my $asm = shift @asm)) {
+            my($addr, undef, $op) = split /\s+/, $asm;
+            if ($op =~ /^call/) {
+                $asm = shift @asm;
+                ($addr, undef, $op) = split /\s+/, $asm;
+                $breakpoint = '*'.$addr;
+                dprint("b $breakpoint");
+                $gdb->send("b $breakpoint");
+                last;
+            }
         }
     }
+
     unless ($breakpoint) {
         $gdb->finish;
         print "Cannot find a suitable breakpoint\n";
@@ -255,7 +264,7 @@ sub init {
 
     $self->send('');
     $self->send('set pagination off');
-    $self->send('set unwindonsignal on');
+#    $self->send('set unwindonsignal on');
 
 }
 
